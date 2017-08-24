@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-16"?>
+<Data xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <HiddenLayerWeights>
+    <ArrayOfDouble>
+      <double>-6.10926900128142</double>
+      <double>-6.42922581944504</double>
+    </ArrayOfDouble>
+    <ArrayOfDouble>
+      <double>-1.90788387128187</double>
+      <double>4.60746361808758</double>
+    </ArrayOfDouble>
+    <ArrayOfDouble>
+      <double>-8.82388330801414</double>
+      <double>4.08020173401414</double>
+    </ArrayOfDouble>
+    <ArrayOfDouble>
+      <double>3.37726611744542</double>
+      <double>-8.66900274095241</double>
+    </ArrayOfDouble>
+  </HiddenLayerWeights>
+  <OutputLayerWeights>
+    <ArrayOfDouble>
+      <double>-14.296915256663</double>
+      <double>-3.82506258590495</double>
+      <double>7.29648311181333</double>
+      <double>4.24206216105633</double>
+    </ArrayOfDouble>
+    <ArrayOfDouble>
+      <double>14.296915256663</double>
+      <double>3.82506258590495</double>
+      <double>-7.29648311181334</double>
+      <double>-4.24206216105633</double>
+    </ArrayOfDouble>
+  </OutputLayerWeights>
+</Data>
