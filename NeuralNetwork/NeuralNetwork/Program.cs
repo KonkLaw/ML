@@ -52,13 +52,13 @@ namespace NeuralNetwork
 				double[] iterationError = new double[_trainset[0].Item1.Length];
 				for (int sampleIndex = 0; sampleIndex < _trainset.Length; sampleIndex++)
 				{
-					double[] output = network.ComputeOutput(_trainset[sampleIndex].Item1);
-					for (int iteminSampleIndex = 0; iteminSampleIndex < output.Length; iteminSampleIndex++)
+					double[] networkOutput = network.ComputeOutput(_trainset[sampleIndex].Item1);
+					for (int iteminSampleIndex = 0; iteminSampleIndex < networkOutput.Length; iteminSampleIndex++)
 					{
-						iterationError[iteminSampleIndex] = output[iteminSampleIndex] - _trainset[sampleIndex].Item2[iteminSampleIndex];
+						iterationError[iteminSampleIndex] = networkOutput[iteminSampleIndex] - _trainset[sampleIndex].Item2[iteminSampleIndex];
 					}
-					error += config.CalcItetaionError(iterationError);
-					network.BackwardPass(iterationError);
+					error += config.E_ErroFunr(iterationError);
+					network.BackwardPass(config, networkOutput, iterationError);
 				}
 
 				// check
@@ -66,8 +66,6 @@ namespace NeuralNetwork
 				Console.WriteLine(error);
 				if (error < config.Error)
 					break;
-
-				// backprop
 			}
 		}
 
@@ -157,9 +155,63 @@ namespace NeuralNetwork
 			return t2;
 		}
 
-		public void BackwardPass(double[] iterationError)
+		public void BackwardPass(Config config, double[] networkOutput, double[] iterationError)
 		{
+			// backprop
 
+			// on putput
+
+			// calc error:
+
+			double[] errArgsOnOutput = new double[_outputLayer.Neurons.Length];
+
+
+			//TODO: check this sum
+			for (int prevIndex = 0; prevIndex < errArgsOnOutput.Length; prevIndex++)
+			{
+				for (int outputIndex = 0; outputIndex < _outputLayer.Neurons.Length; outputIndex++)
+				{
+					errArgsOnOutput[prevIndex] +=
+						-1 * //!!!! TODO
+		_outputLayer.Neurons[outputIndex].Weghts[prevIndex] *
+		iterationError[outputIndex] /* dE / dSum_prevIndex (Sum_onStep) == error */
+		* _outputLayer.Neurons[outputIndex].Deactivate(_outputLayer.Neurons[outputIndex].LastArg) /* df/dSum (Sum_onStep) */;
+				}
+			}
+
+			// correct weights
+
+			for (int neuronIndex = 0; neuronIndex < _outputLayer.Neurons.Length; neuronIndex++)
+			{
+				for (int weightIndex = 0; weightIndex < _outputLayer.Neurons[neuronIndex].Weghts.Length; weightIndex++)
+				{
+					// w_new = w_old + dw * delta
+					_outputLayer.Neurons[neuronIndex].Weghts[weightIndex] +=
+		-config.LearningRate *
+		iterationError[neuronIndex] *
+		_outputLayer.Neurons[neuronIndex].Deactivate(_outputLayer.Neurons[neuronIndex].LastArg) /* df/dSum (Sum_onStep) */
+		* 
+
+					;
+				}
+			}
+
+
+			// correct weights
+
+
+			//double[] dPrevValues = new double[_hiddenLayer.Neurons.Length];
+			for (int prevNeuronIndex = 0; prevNeuronIndex < dPrevValues.Length; prevNeuronIndex++)
+			{
+				for (int j = 0; j < _outputLayer.Neurons.Length; j++)
+				{
+					dPrevValues[prevNeuronIndex] += iterationError[j] * _outputLayer.Neurons[i].;
+				}
+			}
+
+
+			// iterationError => error on arg
+			double[] dw = dF(output);
 		}
 
 		public void Save()
@@ -199,6 +251,8 @@ namespace NeuralNetwork
 
 		public double[] Weghts { get => _weghts; }
 
+		public double LastArg;
+
 		public Neuron(double[] weghts)
 		{
 			_weghts = weghts;
@@ -211,7 +265,21 @@ namespace NeuralNetwork
 			{
 				sum += input[i] * Weghts[i];
 			}
-			return Math.Pow(1 + Math.Exp(-sum), -1);
+			LastArg = sum;
+			return ActFun(LastArg);
+		}
+
+		private double ActFun(double arg)
+		{
+			return Math.Pow(1 + Math.Exp(-arg), -1);
+		}
+
+		public double Deactivate(double arg)
+		{
+			// TODO:
+			// thereticaly f'(arg) = ActFun'[arg]
+			// but 
+			return ActFun(arg) * (1 - ActFun(arg));
 		}
 	}
 }
