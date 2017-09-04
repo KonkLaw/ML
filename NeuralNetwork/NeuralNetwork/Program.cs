@@ -1,32 +1,13 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Xml.Serialization;
-
-
-//TODO:
-// 1) storing inputs
-// 2) storing output
-
 
 namespace NeuralNetwork
 {
-    static class OutputHelper
+    class Program
 	{
-		public static void WriteLine(this double[] array)
-		{
-			foreach (double item in array)
-			{
-				Console.Write(item); Console.Write(" ");
-			}
-			Console.WriteLine();
-		}
-	}
-
-	class Program
-	{
-		private static  (double[], double[])[] _trainset = new(double[], double[])[]
+		private static readonly (double[] Intput, double[] TargetOutput)[] Trainset =
 		{
 			(new double[]{ 0, 0 }, new double[]{ 0, 1 }),
 			(new double[]{ 0, 1 }, new double[]{ 1, 0 }),
@@ -34,7 +15,7 @@ namespace NeuralNetwork
 			(new double[]{ 1, 1 }, new double[]{ 0, 1 })
 		};
 
-		static void Main(string[] args)
+		static void Main()
 		{
 			var network = new Network();
 			//var network = Network.Restore();
@@ -48,37 +29,35 @@ namespace NeuralNetwork
 		static void Train(Network network)
 		{
             int numStep = 0;
-			while (true)
-			{
-				double[] edgeErrors = new double[_trainset.Length];
-				for (int sampleIndex = 0; sampleIndex < _trainset.Length; sampleIndex++)
-				{
-					double[] networkOutput = network.ComputeOutput(_trainset[sampleIndex].Item1);
-                    double[] target = _trainset[sampleIndex].Item2;
-					double error = Config.E_ErroFunn(networkOutput, target);
-					network.BackwardPass(networkOutput, target);
-                    edgeErrors[sampleIndex] = error;
-                }
-            
-				// check
-				double edgeError = edgeErrors.Sum() / edgeErrors.Length;
-                numStep++;
-                Console.WriteLine($"StepNumber = {numStep} Error = {edgeError}");
-                //if (numStep % 1000 == 0)
-                {
-                    //network.Show();
-                }
+		    double edgeError;
+		    do
+		    {
+		        double[] edgeErrors = new double[Trainset.Length];
+		        for (int sampleIndex = 0; sampleIndex < Trainset.Length; sampleIndex++)
+		        {
+		            double[] networkOutput = network.ComputeOutput(Trainset[sampleIndex].Item1);
+		            double[] target = Trainset[sampleIndex].Item2;
+		            double error = Config.E_ErroFunn(networkOutput, target);
+		            network.BackwardPass(networkOutput, target);
+		            edgeErrors[sampleIndex] = error;
+		        }
 
-                if (edgeError < Config.Error)
-					break;
-			}
+		        edgeError = edgeErrors.Avg();
+		        numStep++;
+		        Console.WriteLine($"StepNumber = {numStep} Error = {edgeError}");
+		        //if (numStep % 1000 == 0)
+		        {
+		            //network.Show();
+		        }
+		    } while (edgeError > Config.Error);
 		}
 
 		private static void Test(Network network)
 		{
-            for (int i = 0; i < _trainset.Length; i++)
+            for (int i = 0; i < Trainset.Length; i++)
             {
-                network.ComputeOutput(_trainset[i].Item1).WriteLine();
+                network.ComputeOutput(Trainset[i].Intput).WriteLine("Result");
+                Trainset[i].TargetOutput.WriteLine("Target");
             }
         }
 	}
@@ -87,21 +66,21 @@ namespace NeuralNetwork
 	{
 		protected Neuron[] Neurons;
 		private readonly double[] _output;
-        protected double[] _lastIutput;
+        protected double[] LastIutput;
 
         public Layer(int inputsCount, int outputCount)
 		{
 			Neurons = new Neuron[outputCount];
 			for (int i = 0; i < Neurons.Length; i++)
 			{
-				Neurons[i] = new Neuron(new double[inputsCount]);
+				Neurons[i] = new Neuron(inputsCount);
 			}
 			_output = new double[outputCount];
 		}
 
-		public double[] GetOutput(double[] input)
+		public double[] CalcOutput(double[] input)
 		{
-            _lastIutput = input;
+            LastIutput = input;
             for (int i = 0; i < Neurons.Length; i++)
 			{
 				_output[i] = Neurons[i].Activate(input);
@@ -138,7 +117,7 @@ namespace NeuralNetwork
                 {
                     // - rate * o_i * dEDS_j
                     weights[weightIndex] +=
-                        -1 * Config.LearningRate * _lastIutput[weightIndex]
+                        -1 * Config.LearningRate * LastIutput[weightIndex]
                          * GetHiddenLocalGrad(neuronIndex, gradSums[neuronIndex]);
                 }
             }
@@ -176,7 +155,7 @@ namespace NeuralNetwork
             }
 
             //TODO: !! 1 !!
-            gradSums = new double[_lastIutput.Length];
+            gradSums = new double[LastIutput.Length];
             for (int neuronIndex = 0; neuronIndex < Neurons.Length; neuronIndex++)
             {
                 for (int inputIndex = 0; inputIndex < gradSums.Length; inputIndex++)
@@ -194,7 +173,7 @@ namespace NeuralNetwork
                 {
                     // - rate * o_i * dEDS_j
                     weights[weightIndex] +=
-                        -1 * Config.LearningRate * _lastIutput[weightIndex]
+                        -1 * Config.LearningRate * LastIutput[weightIndex]
                          * localGrads[neuronIndex];
                 }
             }
@@ -222,8 +201,8 @@ namespace NeuralNetwork
 		public double[] ComputeOutput(double[] input)
 		{
 			// TODO: place for cycle
-			double[] t1 = _hiddenLayer.GetOutput(input);
-			double[] t2 = _outputLayer.GetOutput(t1);
+			double[] t1 = _hiddenLayer.CalcOutput(input);
+			double[] t2 = _outputLayer.CalcOutput(t1);
 			return t2;
 		}
 
@@ -252,15 +231,13 @@ namespace NeuralNetwork
 		{
 			var serializer = new XmlSerializer(typeof(SerializedNetwork));
 			Network network;
-			SerializedNetwork data;
 			using (var reader = new StringReader(File.ReadAllText(FileName)))
 			{
-				data = (SerializedNetwork)serializer.Deserialize(reader);
+			    var data = (SerializedNetwork)serializer.Deserialize(reader);
 				network = new Network(data.HiddenLayerWeights[0].Length, data.HiddenLayerWeights.Length, data.OutputLayerWeights.Length);
 				network._hiddenLayer.SetMatrix(data.HiddenLayerWeights);
-			}
-			network._hiddenLayer.SetMatrix(data.HiddenLayerWeights);
-			network._outputLayer.SetMatrix(data.OutputLayerWeights);
+			    network._outputLayer.SetMatrix(data.OutputLayerWeights);
+            }
 			return network;
 		}
 
@@ -271,25 +248,25 @@ namespace NeuralNetwork
         }
     }
 
-    class Rrr
-    {
-        public static readonly Random random = new Random(1);
-    }
-
 	class Neuron
 	{
-		private double[] _inputWeghts;
+		private readonly double[] _inputWeghts;
 
-		public double[] Weghts { get => _inputWeghts; }
+		public double[] Weghts => _inputWeghts;
 
-		public Neuron(double[] inputWeghts)
+	    public Neuron(int inputWeghtsCount)
+	    {
+	        _inputWeghts = new double[inputWeghtsCount];
+	        // Real problem was here!
+	        for (int i = 0; i < _inputWeghts.Length; i++)
+	        {
+	            _inputWeghts[i] = Helpers.GetSmallRandom();
+	        }
+	    }
+
+        public Neuron(double[] inputWeghts)
 		{
             _inputWeghts = inputWeghts;
-			// Real problem was here!
-            for (int i = 0; i < _inputWeghts.Length; i++)
-            {
-                _inputWeghts[i] = Rrr.random.NextDouble() / 100_000d;
-            }
         }
 
         public double Activate(double[] input)
