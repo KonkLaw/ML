@@ -46,7 +46,7 @@
     <Compile Include="Helpers.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SerializedNetwork.cs" />
+    <Compile Include="StoringHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".editorconfig" />

@@ -56,146 +56,161 @@ namespace NeuralNetwork
 		{
             for (int i = 0; i < Trainset.Length; i++)
             {
-                network.ComputeOutput(Trainset[i].Intput).WriteLine("Result");
+                network.ComputeOutput(Trainset[i].Intput).WriteLine("Result", 3);
                 Trainset[i].TargetOutput.WriteLine("Target");
             }
         }
 	}
 
-	class Layer
+	abstract class BaseLayer
 	{
-		protected Neuron[] Neurons;
-		private readonly double[] _output;
-        protected double[] LastIutput;
+		protected readonly Neuron[] Neurons;
+		protected readonly double[] LastOutput;
 
-        public Layer(int inputsCount, int outputCount)
+		public BaseLayer(int inputsCount, int outputCount)
 		{
 			Neurons = new Neuron[outputCount];
 			for (int i = 0; i < Neurons.Length; i++)
 			{
 				Neurons[i] = new Neuron(inputsCount);
 			}
-			_output = new double[outputCount];
+			LastOutput = new double[outputCount];
 		}
 
-		public double[] CalcOutput(double[] input)
+		public abstract double[] CalcOutput(double[] input);
+
+		protected static void CorrectWeights(
+			Neuron[] neurons, double[] prevOutput, double[] localGradients)
 		{
-            LastIutput = input;
-            for (int i = 0; i < Neurons.Length; i++)
+			Debug.Assert(neurons.Length == localGradients.Length);
+			Debug.Assert(neurons[0].Weghts.Length == prevOutput.Length);
+
+			for (int neuronIndex = 0; neuronIndex < neurons.Length; neuronIndex++)
 			{
-				_output[i] = Neurons[i].Activate(input);
+				Neuron neuron = neurons[neuronIndex];
+				double[] weights = neurons[neuronIndex].Weghts;
+				for (int weightIndex = 0; weightIndex < weights.Length; weightIndex++)
+				{
+					weights[weightIndex] +=
+						-1 * Config.LearningRate * prevOutput[weightIndex] * localGradients[neuronIndex];
+				}
 			}
-			return _output;
 		}
 
-		public double[][] GetMatrix()
+		protected static double[] CalcGradSums(
+			double[] localGradients, Neuron[] neurons, int prevNeuronsCount)
 		{
-			double[][] matr = new double[Neurons.Length][];
-			for (int i = 0; i < matr.Length; i++)
+			Debug.Assert(neurons[0].Weghts.Length == prevNeuronsCount);
+
+			double[] newGradSum = new double[prevNeuronsCount];
+			for (int prevNeuronIndex = 0; prevNeuronIndex < newGradSum.Length; prevNeuronIndex++)
 			{
-				matr[i] = Neurons[i].Weghts;
+				for (int neuronIndex = 0; neuronIndex < neurons.Length; neuronIndex++)
+				{
+					newGradSum[prevNeuronIndex] +=
+						localGradients[neuronIndex] * neurons[neuronIndex].Weghts[prevNeuronIndex];
+				}
 			}
-			return matr;
+			return newGradSum;
 		}
+	}
 
-        internal void SetMatrix(double[][] hiddenLayerWeights)
+	class FullyConnectedLayer : BaseLayer
+	{
+		protected double[] LastIutput;
+
+		public FullyConnectedLayer(int inputsCount, int outputCount)
+			: base(inputsCount, outputCount) { }
+
+		public override double[] CalcOutput(double[] input)
 		{
-			Neurons = new Neuron[hiddenLayerWeights.Length];
+			LastIutput = input; // as layer has connections to all previous neurons.
+
 			for (int i = 0; i < Neurons.Length; i++)
 			{
-				Neurons[i] = new Neuron(hiddenLayerWeights[i]);
+				LastOutput[i] = Neurons[i].Activate(input);
 			}
+			return LastOutput;
 		}
 
-        public void BackwardPass(double[] gradSums)
+		public void BackwardPass(double[] gradSums, out double[] newGradSum)
         {
-            for (int neuronIndex = 0; neuronIndex < Neurons.Length; neuronIndex++)
+            // Local gradients for hidden neurons.
+            double[] localGradients = new double[Neurons.Length];
+            for (int i = 0; i < localGradients.Length; i++)
             {
-                Neuron neuron = Neurons[neuronIndex];
-                double[] weights = Neurons[neuronIndex].Weghts;
-                for (int weightIndex = 0; weightIndex < weights.Length; weightIndex++)
-                {
-                    // - rate * o_i * dEDS_j
-                    weights[weightIndex] +=
-                        -1 * Config.LearningRate * LastIutput[weightIndex]
-                         * GetHiddenLocalGrad(neuronIndex, gradSums[neuronIndex]);
-                }
+                localGradients[i] = Neurons[i].DeactivateByValue(LastOutput[i]) * gradSums[i];
             }
+
+			newGradSum = CalcGradSums(localGradients, Neurons, LastIutput.Length);
+            CorrectWeights(Neurons, LastIutput, localGradients);
         }
 
-        private double GetHiddenLocalGrad(int iNeuron, double gradSum)
-        {
-            Neuron neuron = Neurons[iNeuron];
-            return neuron.DeactivateByValue(_output[iNeuron]) * gradSum;
-        }
+		//public double[][] GetMatrix()
+		//{
+		//	double[][] matr = new double[Neurons.Length][];
+		//	for (int i = 0; i < matr.Length; i++)
+		//	{
+		//		matr[i] = Neurons[i].Weghts;
+		//	}
+		//	return matr;
+		//}
+		//internal void SetMatrix(double[][] hiddenLayerWeights)
+		//{
+		//	Neurons = new Neuron[hiddenLayerWeights.Length];
+		//	for (int i = 0; i < Neurons.Length; i++)
+		//	{
+		//		Neurons[i] = new Neuron(hiddenLayerWeights[i]);
+		//	}
+		//}
+		//internal void Show()
+		//{
+		//    for (int i = 0; i < Neurons.Length; i++)
+		//    {
+		//        Neurons[i].Show();
+		//    }
+		//}
+	}
 
-        internal void Show()
-        {
-            for (int i = 0; i < Neurons.Length; i++)
-            {
-                Neurons[i].Show();
-            }
-        }
-    }
-
-    class OutputLayer : Layer
+	class OutputLayer : FullyConnectedLayer
     {
         public OutputLayer(int inputsCount, int outputCount)
             : base(inputsCount, outputCount) { }
 
-        public void BackwardPass1(double[] target, double[] networkOutput, out double[] gradSums)
+        public void BackwardPassOnOutput(
+			double[] target, double[] networkOutput, out double[] newGradSum)
         {
-            double[] localGrads = new double[Neurons.Length];
+			// Local gradients for output neurons.
+			double[] localGradients = new double[Neurons.Length];
             for (int neuronIndex = 0; neuronIndex < Neurons.Length; neuronIndex++)
             {
                 Neuron neuron = Neurons[neuronIndex];
-                localGrads[neuronIndex] =
+				localGradients[neuronIndex] =
                     Config.E_ErroFunnDev(networkOutput, target, neuronIndex)
                     * (neuron.DeactivateByValue(networkOutput[neuronIndex]));
             }
 
-            //TODO: !! 1 !!
-            gradSums = new double[LastIutput.Length];
-            for (int neuronIndex = 0; neuronIndex < Neurons.Length; neuronIndex++)
-            {
-                for (int inputIndex = 0; inputIndex < gradSums.Length; inputIndex++)
-                {
-                    gradSums[inputIndex] +=
-                        localGrads[neuronIndex] * Neurons[neuronIndex].Weghts[inputIndex];
-                }
-            }         
-
-            for (int neuronIndex = 0; neuronIndex < Neurons.Length; neuronIndex++)
-            {
-                Neuron neuron = Neurons[neuronIndex];
-                double[] weights = Neurons[neuronIndex].Weghts;
-                for (int weightIndex = 0; weightIndex < weights.Length; weightIndex++)
-                {
-                    // - rate * o_i * dEDS_j
-                    weights[weightIndex] +=
-                        -1 * Config.LearningRate * LastIutput[weightIndex]
-                         * localGrads[neuronIndex];
-                }
-            }
+			newGradSum = CalcGradSums(localGradients, Neurons, LastIutput.Length);
+			CorrectWeights(Neurons, LastIutput, localGradients);
         }
     }
 
 	class Network
 	{
 		private const string FileName = "data.xml";
-		private readonly Layer _hiddenLayer;
+		private readonly FullyConnectedLayer _hiddenLayer;
 		private readonly OutputLayer _outputLayer;
 
 		public Network() : this(2, 4, 2) { }
 
-		public Network(Layer hiddenLayer, OutputLayer outputLayer)
+		public Network(FullyConnectedLayer hiddenLayer, OutputLayer outputLayer)
 		{
 			_hiddenLayer = hiddenLayer; _outputLayer = outputLayer;
 		}
 
 		public Network(int inputCount, int hiddenCount, int outputCount)
 			: this(
-                new Layer(inputCount, hiddenCount),
+                new FullyConnectedLayer(inputCount, hiddenCount),
                 new OutputLayer(hiddenCount, outputCount)) { }
 
 		public double[] ComputeOutput(double[] input)
@@ -209,69 +224,68 @@ namespace NeuralNetwork
 		public void BackwardPass(double[] networkOutput, double[] target)
 		{
             double[] localGrads;
-            _outputLayer.BackwardPass1(target, networkOutput, out localGrads);
-            _hiddenLayer.BackwardPass(localGrads);
+			double[] newLocalGrads;
+			_outputLayer.BackwardPassOnOutput(target, networkOutput, out newLocalGrads);
+			localGrads = newLocalGrads;
+			_hiddenLayer.BackwardPass(localGrads, out newLocalGrads);
         }
 
-		public void Save()
-		{
-			var serializer = new XmlSerializer(typeof(SerializedNetwork));
-			using (var writer = new StringWriter())
-			{
-				serializer.Serialize(writer, new SerializedNetwork
-                {
-					HiddenLayerWeights = _hiddenLayer.GetMatrix(),
-					OutputLayerWeights = _outputLayer.GetMatrix(),
-				});
-				File.WriteAllText(FileName, writer.ToString());
-			}
-		}
-
-		public static Network Restore()
-		{
-			var serializer = new XmlSerializer(typeof(SerializedNetwork));
-			Network network;
-			using (var reader = new StringReader(File.ReadAllText(FileName)))
-			{
-			    var data = (SerializedNetwork)serializer.Deserialize(reader);
-				network = new Network(data.HiddenLayerWeights[0].Length, data.HiddenLayerWeights.Length, data.OutputLayerWeights.Length);
-				network._hiddenLayer.SetMatrix(data.HiddenLayerWeights);
-			    network._outputLayer.SetMatrix(data.OutputLayerWeights);
-            }
-			return network;
-		}
-
-        internal void Show()
-        {
-            _hiddenLayer.Show();
-            _outputLayer.Show();
-        }
+		//public void Save()
+		//{
+		//	var serializer = new XmlSerializer(typeof(SerializedNetwork));
+		//	using (var writer = new StringWriter())
+		//	{
+		//		serializer.Serialize(writer, new SerializedNetwork
+        //        {
+		//			HiddenLayerWeights = _hiddenLayer.GetMatrix(),
+		//			OutputLayerWeights = _outputLayer.GetMatrix(),
+		//		});
+		//		File.WriteAllText(FileName, writer.ToString());
+		//	}
+		//}
+		//public static Network Restore()
+		//{
+		//	var serializer = new XmlSerializer(typeof(SerializedNetwork));
+		//	Network network;
+		//	using (var reader = new StringReader(File.ReadAllText(FileName)))
+		//	{
+		//	    var data = (SerializedNetwork)serializer.Deserialize(reader);
+		//		network = new Network(data.HiddenLayerWeights[0].Length, data.HiddenLayerWeights.Length, data.OutputLayerWeights.Length);
+		//		network._hiddenLayer.SetMatrix(data.HiddenLayerWeights);
+		//	    network._outputLayer.SetMatrix(data.OutputLayerWeights);
+        //    }
+		//	return network;
+		//}
+        //internal void Show()
+        //{
+        //    _hiddenLayer.Show();
+        //    _outputLayer.Show();
+        //}
     }
 
 	class Neuron
 	{
-		private readonly double[] _inputWeghts;
-
-		public double[] Weghts => _inputWeghts;
+        public readonly double[] Weghts;
 
 	    public Neuron(int inputWeghtsCount)
 	    {
-	        _inputWeghts = new double[inputWeghtsCount];
+            Weghts = new double[inputWeghtsCount];
 	        // Real problem was here!
-	        for (int i = 0; i < _inputWeghts.Length; i++)
+	        for (int i = 0; i < Weghts.Length; i++)
 	        {
-	            _inputWeghts[i] = Helpers.GetSmallRandom();
+                Weghts[i] = Helpers.GetSmallRandom();
 	        }
 	    }
 
         public Neuron(double[] inputWeghts)
 		{
-            _inputWeghts = inputWeghts;
+            Weghts = inputWeghts;
         }
 
         public double Activate(double[] input)
         {
-            Debug.Assert(_inputWeghts.Length == input.Length);
+            Debug.Assert(Weghts.Length == input.Length);
+
             double sum = 0;
         	for (int i = 0; i < input.Length; i++)
         	{
@@ -279,12 +293,9 @@ namespace NeuralNetwork
         	}
             return ActFun(sum);
         }
-        
-        private static double ActFun(double arg)
-        {
-        	return Math.Pow(1 + Math.Exp(-arg), -1);
-        }
-        
+
+        private static double ActFun(double arg) => Math.Pow(1 + Math.Exp(-arg), -1);
+
         public double DeactivateByValue(double arg)
         {
         	// TODO:
@@ -293,13 +304,13 @@ namespace NeuralNetwork
         	return arg * (1 - arg);
         }
 
-        internal void Show()
-        {
-            for (int i = 0; i < Weghts.Length; i++)
-            {
-                Console.Write(Weghts[i] + " ");
-            }
-            Console.WriteLine();
-        }
+        //internal void Show()
+        //{
+        //    for (int i = 0; i < Weghts.Length; i++)
+        //    {
+        //        Console.Write(Weghts[i] + " ");
+        //    }
+        //    Console.WriteLine();
+        //}
     }
 }
