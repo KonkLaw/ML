@@ -1,33 +1,29 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace NeuralNetwork
 {
-	internal class Config
+	internal static class Config
 	{
-		public double Error { get; }
+        public static double Error { get; } = 0.001d;
 
-		public readonly double LearningRate = 0.1d;
+        public static readonly double LearningRate = 0.1d;
 
-		public Config(double error)
+		internal static double E_ErroFunn(double[] result, double[] target)
 		{
-			Error = error;
+            Debug.Assert(result.Length == target.Length);
+            double error = 0;
+            for (int i = 0; i < result.Length; i++)
+            {
+                double dif = (target[i] - result[i]);
+                error += dif * dif;
+            }
+			return error / 2;
 		}
 
-		internal double E_ErroFunr(double[] iterationError)
-		{
-			double error = 0;
-			for (int i = 0; i < iterationError.Length; i++)
-			{
-				error += iterationError[i] * iterationError[i];
-			}
-			return error / iterationError.Length;
-		}
-
-		internal double dEdf_ErroFunrDer_i(double arg)
-		{
-			return arg;
-		}
-
-
-	}
+        internal static double E_ErroFunnDev(double[] result, double[] target, int derivativeComponent)
+        {
+            return -(target[derivativeComponent] - result[derivativeComponent]);
+        }
+    }
 }
